@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'dart:developer';
 
-import 'package:excel/excel.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
+import 'package:pool_cover/screens/gallery.dart';
+import 'package:pool_cover/screens/noInternet.dart';
+import 'package:pool_cover/screens/splash.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,64 +36,125 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  fileData(int Height, int Width) async {
-    var file = await rootBundle.load("assets/document.xlsx");
-    var excel = Excel.decodeBytes(
-        file.buffer.asUint8List(file.offsetInBytes, file.lengthInBytes));
-    var worksheetsNames = excel.tables.keys;
-    // var sheet = excel.tables["Calculator"];
-    // var width = sheet!.cell(CellIndex.indexByString("C4"));
-    // var height = sheet.cell(CellIndex.indexByString("C8"));
-    // width.value = Width;
-    // height.value = height;
-    for (var sheetName in worksheetsNames) {
-      if (sheetName == 'Calculator') {
-        var sheet = excel.tables[sheetName];
-        var sheetRows = sheet!.rows;
-        var rowsLength = sheetRows.length;
-        try {
-          for (var idx = 0; idx < rowsLength; idx++) {
-            var row = sheetRows[idx];
-            // print(" ${row.map((e) => '${e?.value}').join(' | ')}");
-            log("${row[0]?.value} | ${row[1]?.value} | ${row[2]?.value} | ${row[3]?.value} | ${row[4]?.value} | ${row[5]?.value} | ${row[6]?.value} | ${row[7]?.value} | ${row[8]?.value} ");
-          }
-        } catch (e) {
-          log("$e");
-        }
-        break;
-      }
-    }
-  }
+  final TextEditingController _width = TextEditingController();
+  final TextEditingController _height = TextEditingController();
+  int index = 0;
 
   @override
   void initState() {
-    // TODO: implement initState
+    Future.delayed(const Duration(seconds: 2), (() {
+      index = 1;
+      setState(() {});
+    }));
     super.initState();
-    fileData(5000, 4000);
+  }
+
+  toast(BuildContext context, String message) {
+    final toast = ScaffoldMessenger.of(context);
+    toast.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  checkConnection() async {
+    return await InternetConnectionCheckerPlus().hasConnection;
+  }
+
+  SetData(int height, int width) async {
+    log('hi3');
+    if (await checkConnection()) {
+      http.Response Data = await http.post(
+        Uri.parse(
+          "https://script.google.com/macros/s/AKfycbzBlxBbIVCswBOViEmGlphA4yFyK6z3Np7NGlaU8vfbP7aiYvyRWoQyZHkOUaM1WqdMxw/exec",
+        ),
+        body: {
+          "height": height.toString(),
+          "width": width.toString(),
+        },
+      );
+      log(Data.body);
+    } else {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (context) => const NoInternet()));
+    }
+  }
+
+  GetData() async {
+    if (await checkConnection()) {
+      http.Response data = await http.get(
+        Uri.parse(
+            "https://script.google.com/macros/s/AKfycbzBlxBbIVCswBOViEmGlphA4yFyK6z3Np7NGlaU8vfbP7aiYvyRWoQyZHkOUaM1WqdMxw/exec"),
+      );
+      var response = jsonDecode(data.body);
+
+      log("$response");
+    } else {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (context) => const NoInternet()));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pool_Cover'),
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ),
+        title: const Text(
+          'Stuba',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          IconButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const Gallery()));
+              },
+              icon: const Icon(Icons.image)),
+        ],
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      body: IndexedStack(
+        index: index,
         children: [
-          Row(
+          const splash(),
+          Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(hintText: "Height"),
-                ),
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _height,
+                      decoration: const InputDecoration(hintText: "Height"),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _width,
+                      decoration: const InputDecoration(hintText: "Width"),
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(hintText: "Width"),
-                ),
-              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (_width.text.isEmpty || _height.text.isEmpty) {
+                    toast(context, "Height and Width cannot be empty");
+                  } else if (int.parse(_width.text.toString()) < 3000) {
+                    toast(context, "Width cannot be less than 3000mm");
+                  } else if (int.parse(_width.text.toString()) > 12000) {
+                    toast(context, "Width cannot be greater than 12000mm");
+                  } else if (int.parse(_height.text.toString()) < 8000) {
+                    toast(context, "Height cannot be less than 8000mm");
+                  } else if (int.parse(_height.text.toString()) > 28000) {
+                    toast(context, "Height cannot be greater than 28000mm");
+                  } else {
+                    SetData(int.parse(_height.text.toString()),
+                        int.parse(_width.text.toString()));
+                  }
+                },
+                child: const Text('submit'),
+              )
             ],
           )
         ],
